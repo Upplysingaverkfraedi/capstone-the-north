@@ -1,0 +1,275 @@
+---
+title: "Rotten Tomatoes sql"
+author: "Gígja Marín"
+date: "2024-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Hleður nauðsynlegum bókasöfnum
+library(DBI)
+library(RSQLite)
+
+# Tengist SQLite gagnagrunninum
+conn <- dbConnect(RSQLite::SQLite(), "Documents/GitHub/capstone-the-north/data2/rotten_tomatoes.db")
+
+# Les gögnin inn úr töflunni í gagnagrunninum til að skoða gögnin ef þú vilt
+rotten_tomatoes_data <- dbReadTable(conn, "rotten_tomatoes_movies")
+rotten_tomatoes_leo_kate <- dbReadTable(conn, "rotten_tomatoes_movies_dicaprio_winslet")
+rotten_tomatoes_actors <- dbReadTable(conn, "movie_actors")
+actors_info <- dbReadTable(conn, "actors_info")
+
+
+# Lokar tengingunni
+dbDisconnect(conn)
+
+```
+
+
+## Búa til töflu bara með myndum sem Leonardo DiCaprio hefur verið í 
+```{r}
+# Hleður nauðsynlegum bókasöfnum
+library(DBI)
+library(RSQLite)
+
+# Tengist SQLite gagnagrunninum
+conn <- dbConnect(RSQLite::SQLite(), "Documents/GitHub/capstone-the-north/data2/rotten_tomatoes.db")
+
+# Sækir myndir með Leonardo DiCaprio úr rotten_tomatoes_movies_dicaprio_winslet töflunni
+leo_movies <- dbGetQuery(conn, "
+  SELECT *
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE actors LIKE '%Leonardo DiCaprio%'
+")
+
+# Skoða fyrstu línurnar til að staðfesta niðurstöðuna
+print(head(leo_movies))
+
+# Lokar tengingunni
+dbDisconnect(conn)
+
+```
+
+## Graf sem sýnir samband milli content_rating og Leo_movies
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Create a new dataset with the count and percentage of movies for each content rating
+leo_movies_count <- leo_movies %>%
+  group_by(content_rating) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = (count / sum(count)) * 100) # Calculate percentages
+
+# Define more descriptive labels
+rating_labels <- c("R" = "Restricted (17+)", "G" = "General Audience", 
+                   "PG-13" = "Parents Strongly Cautioned (13+)", 
+                   "NR" = "Not Rated", "PG" = "Parental Guidance")
+
+# Draw the bar chart with descriptive labels, angled x-axis text, and percentage labels
+ggplot(leo_movies_count, aes(x = content_rating, y = count, fill = content_rating)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            vjust = -0.5, size = 3.5) + # Add percentage labels above bars
+  scale_fill_manual(values = c("R" = "pink", "G" = "purple", 
+                               "PG-13" = "blue", "NR" = "hotpink", 
+                               "PG" = "skyblue")) +
+  scale_x_discrete(labels = rating_labels) + # Use descriptive labels
+  labs(
+    title = "Number of Movies with Leonardo DiCaprio by Content Rating",
+    x = "Content Rating",
+    y = "Number of Movies"
+  ) +
+  ylim(0, max(leo_movies_count$count) * 1.2) + # Extend y-axis to 120% of the max count
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Angle x-axis text
+```
+
+
+Nú fyrir Kate Winslet: 
+```{r}
+# Hleður nauðsynlegum bókasöfnum
+library(DBI)
+library(RSQLite)
+
+# Tengist SQLite gagnagrunninum
+conn <- dbConnect(RSQLite::SQLite(), "Documents/GitHub/capstone-the-north/data2/rotten_tomatoes.db")
+
+# Sækir myndir með Kate Winslet úr rotten_tomatoes_movies_dicaprio_winslet töflunni
+kate_movies <- dbGetQuery(conn, "
+  SELECT *
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE actors LIKE '%Kate Winslet%'
+")
+
+# Skoða fyrstu línurnar til að staðfesta niðurstöðuna
+print(head(kate_movies))
+
+# Lokar tengingunni
+dbDisconnect(conn)
+
+```
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Create a new dataset with the count and percentage of movies for each content rating
+kate_movies_count <- kate_movies %>%
+  group_by(content_rating) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = (count / sum(count)) * 100) # Calculate percentages
+
+# Define more descriptive labels
+rating_labels <- c("R" = "Restricted (17+)", "G" = "General Audience", 
+                   "PG-13" = "Parents Strongly Cautioned (13+)", 
+                   "NR" = "Not Rated", "PG" = "Parental Guidance")
+
+# Draw the bar chart with descriptive labels, angled x-axis text, and percentage labels
+ggplot(kate_movies_count, aes(x = content_rating, y = count, fill = content_rating)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            vjust = -0.5, size = 3.5) + # Add percentage labels above bars
+  scale_fill_manual(values = c("R" = "pink", "G" = "purple", 
+                               "PG-13" = "blue", "NR" = "hotpink", 
+                               "PG" = "skyblue")) +
+  scale_x_discrete(labels = rating_labels) + # Use descriptive labels
+  labs(
+    title = "Number of Movies with Leonardo DiCaprio by Content Rating",
+    x = "Content Rating",
+    y = "Number of Movies"
+  ) +
+  ylim(0, max(kate_movies_count$count) * 1.2) + # Extend y-axis to 120% of the max count
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) # Angle x-axis text
+```
+
+
+```{r}
+
+library(DBI)
+library(RSQLite)
+
+# Connect to the SQLite database
+conn <- dbConnect(SQLite(), "Documents/GitHub/capstone-the-north/data2/rotten_tomatoes.db")
+
+# Drop the table if it exists
+dbExecute(conn, "DROP TABLE IF EXISTS leo_kate_movies;")
+
+# Run the query to create a new table with movies starring both Leonardo DiCaprio and Kate Winslet
+query <- "
+  CREATE TABLE leo_kate_movies AS
+  SELECT * 
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE actors LIKE '%Leonardo DiCaprio%' 
+    AND actors LIKE '%Kate Winslet%'
+"
+# Execute the query
+dbExecute(conn, query)
+
+# Optional: Verify the table by fetching data from it
+leo_kate_movies <- dbReadTable(conn, "leo_kate_movies")
+print(leo_kate_movies)
+
+# Close the database connection
+dbDisconnect(conn)
+```
+
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+
+# Helper function to extract the decade
+extract_decade <- function(date) {
+  year <- as.numeric(substr(date, 1, 4))
+  decade <- floor(year / 10) * 10
+  return(decade)
+}
+
+# Filter out rows with NA in original_release_date and add a decade column to both datasets
+leo_movies2 <- leo_movies %>%
+  filter(!is.na(original_release_date)) %>%  # Remove NA values
+  mutate(decade = extract_decade(original_release_date)) %>%
+  group_by(decade) %>%
+  summarise(count = n(), actor = "Leonardo DiCaprio")
+
+kate_movies2 <- kate_movies %>%
+  filter(!is.na(original_release_date)) %>%  # Remove NA values
+  mutate(decade = extract_decade(original_release_date)) %>%
+  group_by(decade) %>%
+  summarise(count = n(), actor = "Kate Winslet")
+
+# Combine the two datasets and remove NA decades
+movies_decades <- bind_rows(leo_movies2, kate_movies2) %>%
+  filter(!is.na(decade))  # Remove rows with NA in the decade column
+
+# Plot the data
+ggplot(movies_decades, aes(x = factor(decade), y = count, fill = actor)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Number of Movies Released by Decade",
+    x = "Decade",
+    y = "Number of Movies"
+  ) +
+  scale_fill_manual(values = c("Leonardo DiCaprio" = "blue", "Kate Winslet" = "purple")) +
+  theme_minimal()
+```
+
+
+# Fleiri hugmyndir
+
+Gætum reynt að komast að því hvor er betri leikari samkvæmt út frá gögnunum okkar. 
+
+- Skoða starfsferil þeirra, vinsældir, gagnrýni og áhorfendamat.
+
+### Samanburður á Tomatometer og Audience Rating:
+
+- Bera saman meðaltal þeirra í tomatometer_rating og audience_rating til að sjá hver fær hærri einkunnir frá gagnrýnendum og áhorfendum.
+
+- Gera súlurit sem ber saman meðaleinkunnir, skipt eftir tomatometer (gagnrýnendur) og audience (áhorfendur).
+
+#### Þróun einkunna yfir tíma:
+
+- Skoða hvernig einkunnir hvers leikarans hafa þróast yfir árin til að greina stefnur (t.d. hvort einkunnir hafi batnað með mismunandi hlutverkum).
+
+- Gera línurit sem sýnir meðaltal tomatometer_rating og audience_rating yfir áratugi fyrir hvern leikara.
+
+#### Frammistaða eftir tegundum (Genre):
+
+- Greina í hvaða genre hver leikari fær hæstu einkunnir. 
+
+- Töflur: Meðaleinkunnir tomatometer_rating og audience_rating fyrir hverja tegund, eftir leikara.
+- Gera súlurit eða side by side súlurit eftir tegund til að auðvelda samanburð.
+
+#### Mismunur á gagnrýnenda- og áhorfendaeinkunnum:
+
+Skoða myndir með mikinn mun á milli tomatometer_rating og audience_rating. Þetta gæti varpað ljósi á hvor leikarinn á fleiri "kult" myndir eða myndir sem gagnrýnendur elska meira en áhorfendur.
+
+Töflur: Myndir með mesta mismuninn í einkunnum fyrir hvern leikara.
+Gröf: Dreifirit af tomatometer_rating á móti audience_rating með merkjum fyrir mikilvægar myndir.
+
+
+#### Hæst og lægst metnu myndir:
+
+Búa til lista yfir hæst og lægst metnu myndir hvers leikarans samkvæmt bæði gagnrýnendum og áhorfendum.
+Töflur: Topp 5 og neðstu 5 myndir eftir tomatometer_rating og audience_rating.
+Gert mögulega eh graf útúr því líka. 
+
+#### Skoða myndirnar sem þau leika í saman: 
+
+Kanna hversu oft þau hafa leikið saman og hvort þær myndir fá hærri einkunnir eða meiri vinsældir.
+
+Gröf: Dreifirit af myndum með tomatometer_rating á x-ás og audience_rating á y-ás. 
+
+Nota original_release_date til að sýna hápunkta í ferlinum eða merkjanlegar breytingar (t.d. þegar DiCaprio eða Winslet unnu Óskarsverðlaun).
+
+
+Gröf: Tímalínurit eða merkt línurit sem sýnir myndir þeirra með áherslu á mikilvæga áfanga.
+
