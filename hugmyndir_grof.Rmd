@@ -1,0 +1,160 @@
+---
+title: "fleiri gröf"
+author: "Ásdís Halla Guðmundsdóttir"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
+
+# Tengist SQLite gagnagrunninum
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/desktop/capstone-the-north-main 2/data/rotten_tomatoes.db")
+
+# Sækir myndir með Leonardo DiCaprio úr rotten_tomatoes_movies_dicaprio_winslet töflunni
+leo_movies <- dbGetQuery(conn, "
+  SELECT *
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE actors LIKE '%Leonardo DiCaprio%'
+")
+
+dbDisconnect(conn)
+```
+
+
+```{r}
+
+# Tengist SQLite gagnagrunninum
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/desktop/capstone-the-north-main 2/data/rotten_tomatoes.db")
+
+# Sækir myndir með Kate Winslet úr rotten_tomatoes_movies_dicaprio_winslet töflunni
+kate_movies <- dbGetQuery(conn, "
+  SELECT *
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE actors LIKE '%Kate Winslet%'
+")
+
+dbDisconnect(conn)
+```
+
+
+```{r}
+
+# Connect to the SQLite database
+conn <- dbConnect(SQLite(), "/Users/asdishalla/desktop/capstone-the-north-main 2/data/rotten_tomatoes.db")
+
+# Drop the table if it exists
+dbExecute(conn, "DROP TABLE IF EXISTS leo_kate_movies;")
+
+
+query <- "
+  CREATE TABLE leo_kate_movies AS
+  SELECT * 
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE actors LIKE '%Leonardo DiCaprio%' 
+    AND actors LIKE '%Kate Winslet%'
+"
+# Execute the query
+dbExecute(conn, query)
+
+
+dbDisconnect(conn)
+```
+
+
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Ensure leo_movies and kate_movies are loaded and contain necessary columns, including 'Director', 'Production Company', and 'tomatometer_rating'
+
+# Top 10 Directors for Leonardo DiCaprio (by movie count), with average Tomatometer rating
+leo_top_directors <- leo_movies %>%
+  filter(!is.na(directors), !is.na(tomatometer_rating)) %>%
+  group_by(directors) %>%
+  summarise(
+    movie_count = n(),
+    avg_tomatometer_rating = mean(tomatometer_rating, na.rm = TRUE)
+  ) %>%
+  arrange(desc(movie_count)) %>%
+  slice(1:10)
+
+# Top 10 Directors for Kate Winslet (by movie count), with average Tomatometer rating
+kate_top_directors <- kate_movies %>%
+  filter(!is.na(directors), !is.na(tomatometer_rating)) %>%
+  group_by(directors) %>%
+  summarise(
+    movie_count = n(),
+    avg_tomatometer_rating = mean(tomatometer_rating, na.rm = TRUE)
+  ) %>%
+  arrange(desc(movie_count)) %>%
+  slice(1:10)
+
+# Interactive Plot for Top Directors with Average Tomatometer Rating
+leo_directors_plot <- ggplot(leo_top_directors, aes(x = reorder(directors, -avg_tomatometer_rating), y = avg_tomatometer_rating, text = paste("Movies:", movie_count))) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Top 10 Directors for Leonardo DiCaprio (Average Tomatometer Rating)", x = "Director", y = "Average Tomatometer Rating") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+kate_directors_plot <- ggplot(kate_top_directors, aes(x = reorder(directors, -avg_tomatometer_rating), y = avg_tomatometer_rating, text = paste("Movies:", movie_count))) +
+  geom_bar(stat = "identity", fill = "purple") +
+  labs(title = "Top 10 Directors for Kate Winslet (Average Tomatometer Rating)", x = "Director", y = "Average Tomatometer Rating") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Convert ggplot to plotly for interactivity
+ggplotly(leo_directors_plot, tooltip = "text")
+ggplotly(kate_directors_plot, tooltip = "text")
+
+# Top 10 Production Companies for Leonardo DiCaprio (by movie count), with average Tomatometer rating
+leo_top_production <- leo_movies %>%
+  filter(!is.na(`production_company`), !is.na(tomatometer_rating)) %>%
+  group_by(`production_company`) %>%
+  summarise(
+    movie_count = n(),
+    avg_tomatometer_rating = mean(tomatometer_rating, na.rm = TRUE)
+  ) %>%
+  arrange(desc(movie_count)) %>%
+  slice(1:10)
+
+# Top 10 Production Companies for Kate Winslet (by movie count), with average Tomatometer rating
+kate_top_production <- kate_movies %>%
+  filter(!is.na(`production_company`), !is.na(tomatometer_rating)) %>%
+  group_by(`production_company`) %>%
+  summarise(
+    movie_count = n(),
+    avg_tomatometer_rating = mean(tomatometer_rating, na.rm = TRUE)
+  ) %>%
+  arrange(desc(movie_count)) %>%
+  slice(1:10)
+
+# Interactive Plot for Top Production Companies with Average Tomatometer Rating
+leo_production_plot <- ggplot(leo_top_production, aes(x = reorder(`production_company`, -avg_tomatometer_rating), y = avg_tomatometer_rating, text = paste("Movies:", movie_count))) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Top 10 Production Companies for Leonardo DiCaprio (Average Tomatometer Rating)", x = "Production Company", y = "Average Tomatometer Rating") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+kate_production_plot <- ggplot(kate_top_production, aes(x = reorder(`production_company`, -avg_tomatometer_rating), y = avg_tomatometer_rating, text = paste("Movies:", movie_count))) +
+  geom_bar(stat = "identity", fill = "purple") +
+  labs(title = "Top 10 Production Companies for Kate Winslet (Average Tomatometer Rating)", x = "Production Company", y = "Average Tomatometer Rating") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Convert ggplot to plotly for interactivity
+ggplotly(leo_production_plot, tooltip = "text")
+ggplotly(kate_production_plot, tooltip = "text")
+
+```
+
