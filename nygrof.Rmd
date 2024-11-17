@@ -1,0 +1,300 @@
+---
+title: "ný gröf"
+author: "Ásdís Halla Guðmundsdóttir"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(DBI)
+library(RSQLite)
+
+# Connect to the SQLite database
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/Desktop/capstone-the-north-Gagnagrunnur 2/data/rotten_tomatoes.db")
+
+# Query to extract all columns for movies directed by directors who worked with either Kate or Leo
+kate_leo_directors_movies <- dbGetQuery(conn, "
+  SELECT *
+  FROM kate_movies
+  WHERE directors IS NOT NULL
+  UNION
+  SELECT *
+  FROM leo_movies
+  WHERE directors IS NOT NULL
+")
+
+# Create a new table in the database with the combined data
+dbWriteTable(conn, "kate_leo_directors_movies", kate_leo_directors_movies, overwrite = TRUE)
+
+# Disconnect from the database
+dbDisconnect(conn)
+
+```
+
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Connect to the SQLite database
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/Desktop/capstone-the-north-Gagnagrunnur 2/data/rotten_tomatoes.db")
+
+# Query to get production company, actor, movie, audience rating, and audience count information
+kate_leo_productions <- dbGetQuery(conn, "
+  SELECT production_company, movie_title, audience_rating, audience_count,
+    CASE
+      WHEN actors LIKE '%Leonardo DiCaprio%' AND actors LIKE '%Kate Winslet%' THEN 'Bæði'
+      WHEN actors LIKE '%Leonardo DiCaprio%' THEN 'Leo'
+      WHEN actors LIKE '%Kate Winslet%' THEN 'Kate'
+      ELSE NULL
+    END AS actor
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE production_company IS NOT NULL AND actors IS NOT NULL
+")
+
+# Disconnect from the database
+dbDisconnect(conn)
+
+# Calculate the average audience rating, average audience count, and collect movie titles per production company and actor
+production_counts <- kate_leo_productions %>%
+  mutate(production_company = gsub(" ", "\n", production_company)) %>%  # Add line breaks in company names
+  group_by(production_company, actor) %>%
+  summarise(
+    avg_audience_rating = mean(audience_rating, na.rm = TRUE),
+    avg_audience_count = mean(audience_count, na.rm = TRUE),
+    movie_count = n(),
+    movies = paste(movie_title, collapse = ", ")
+  ) %>%
+  ungroup()
+
+# Limit to top 10 production companies by movie count
+top_production_companies <- production_counts %>%
+  group_by(production_company) %>%
+  summarise(total_movies = sum(movie_count)) %>%
+  top_n(10, total_movies) %>%
+  pull(production_company)
+
+# Filter data for only the top 10 production companies
+filtered_production_counts <- production_counts %>%
+  filter(production_company %in% top_production_companies)
+
+# Create the updated side-by-side bar chart with avg audience rating on the y-axis
+p <- ggplot(filtered_production_counts, aes(
+  x = reorder(production_company, -avg_audience_rating),
+  y = avg_audience_rating,
+  fill = actor,
+  text = paste("Meðal áhorfenda fjöldi:", round(avg_audience_count),
+               "<br>Myndir:", movies)
+)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  labs(title = "Topp 10 framleiðslufyrirtæki miðað við meðal áhorfenda einkunn",
+       x = "Framleiðslufyrirtæki", y = "Meðal áhorfenda einkunn") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 8, hjust = 0.5)) +  # Keep labels horizontal
+  scale_fill_manual(values = c("Kate" = "violet", "Leo" = "skyblue", "Bæði" = "gold")) +
+  guides(fill = guide_legend(title = "Actor")) +
+  geom_text(aes(label = round(avg_audience_rating, 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3)  # Add labels on top of each bar
+
+# Widen the plot
+options(repr.plot.width = 12, repr.plot.height = 6)  # Adjust the width and height for better label display
+
+# Convert to interactive plot with plotly
+ggplotly(p, tooltip = "text")
+
+```
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+options(repr.plot.width=12, repr.plot.height=6)
+
+# Connect to the SQLite database
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/Desktop/capstone-the-north-Gagnagrunnur 2/data/rotten_tomatoes.db")
+
+# Query to get production company, actor, movie, tomatometer rating, and tomatometer count information
+kate_leo_productions <- dbGetQuery(conn, "
+  SELECT production_company, movie_title, tomatometer_rating, tomatometer_count,
+    CASE
+      WHEN actors LIKE '%Leonardo DiCaprio%' AND actors LIKE '%Kate Winslet%' THEN 'Bæði'
+      WHEN actors LIKE '%Leonardo DiCaprio%' THEN 'Leo'
+      WHEN actors LIKE '%Kate Winslet%' THEN 'Kate'
+      ELSE NULL
+    END AS actor
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE production_company IS NOT NULL AND actors IS NOT NULL
+")
+
+# Disconnect from the database
+dbDisconnect(conn)
+
+# Calculate the average tomatometer rating, average tomatometer count, and collect movie titles per production company and actor
+production_counts <- kate_leo_productions %>%
+  mutate(production_company = gsub(" ", "\n", production_company)) %>%  # Add line breaks in company names
+  group_by(production_company, actor) %>%
+  summarise(
+    avg_tomatometer_rating = mean(tomatometer_rating, na.rm = TRUE),
+    avg_tomatometer_count = mean(tomatometer_count, na.rm = TRUE),
+    movie_count = n(),
+    movies = paste(movie_title, collapse = ", ")
+  ) %>%
+  ungroup()
+
+# Limit to top 10 production companies by movie count
+top_production_companies <- production_counts %>%
+  group_by(production_company) %>%
+  summarise(total_movies = sum(movie_count)) %>%
+  top_n(10, total_movies) %>%
+  pull(production_company)
+
+# Filter data for only the top 10 production companies
+filtered_production_counts <- production_counts %>%
+  filter(production_company %in% top_production_companies)
+
+# Create the updated side-by-side bar chart with avg tomatometer rating on the y-axis
+p <- ggplot(filtered_production_counts, aes(
+  x = reorder(production_company, -avg_tomatometer_rating),
+  y = avg_tomatometer_rating,
+  fill = actor,
+  text = paste("Meðal Tomatometer fjöldi:", round(avg_tomatometer_count),
+               "<br>Myndir:", movies)
+)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  labs(title = "Topp 10 framleiðslufyrirtæki miðað við meðal Tomatometer einkunn",
+       x = "Framleiðslufyrirtæki", y = "Meðal Tomatometer einkunn") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 8, hjust = 0.5)) +  # Keep labels horizontal
+  scale_fill_manual(values = c("Kate" = "violet", "Leo" = "skyblue", "Bæði" = "gold")) +
+  guides(fill = guide_legend(title = "Actor")) +
+  geom_text(aes(label = round(avg_tomatometer_rating, 1)), 
+            position = position_dodge(width = 0.9), vjust = -0.5, size = 3)  # Add labels on top of each bar
+
+# Widen the plot
+options(repr.plot.width = 12, repr.plot.height = 6)  # Adjust the width and height for better label display
+
+# Convert to interactive plot with plotly
+ggplotly(p, tooltip = "text")
+
+
+```
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Connect to the SQLite database
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/Desktop/capstone-the-north-Gagnagrunnur 2/data/rotten_tomatoes.db")
+
+# Query to get movie, director, Audience rating, and actors
+top_movies <- dbGetQuery(conn, "
+  SELECT directors, movie_title, audience_rating,
+    CASE
+      WHEN actors LIKE '%Leonardo DiCaprio%' AND actors LIKE '%Kate Winslet%' THEN 'Bæði'
+      WHEN actors LIKE '%Leonardo DiCaprio%' THEN 'Leo'
+      WHEN actors LIKE '%Kate Winslet%' THEN 'Kate'
+      ELSE NULL
+    END AS actor
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE audience_rating IS NOT NULL AND directors IS NOT NULL
+  ORDER BY audience_rating DESC
+  LIMIT 10
+")
+
+# Disconnect from the database
+dbDisconnect(conn)
+
+# Replace spaces in director names with newlines for better readability
+top_movies <- top_movies %>%
+  mutate(directors = gsub(" ", "\n", directors))
+
+# Create the bar chart
+p <- ggplot(top_movies, aes(
+  x = reorder(directors, -audience_rating),
+  y = audience_rating,
+  fill = actor,
+  text = paste("Movie:", movie_title)
+)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Topp 10 leikstjórar miðað við áhorfenda einkunn",
+       x = "Leikstjórar", y = "áhorfenda einkunn") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 8, hjust = 0.5)) +  # Keep horizontal labels with smaller font
+  scale_fill_manual(values = c("Kate" = "violet", "Leo" = "skyblue", "Bæði" = "gold")) +
+  guides(fill = guide_legend(title = "Actor")) +
+  geom_text(aes(label = round(audience_rating, 1)), vjust = -0.5, size = 3)  # Add labels on top of bars
+
+# Convert to interactive plot with plotly
+ggplotly(p, tooltip = "text")
+
+```
+
+
+```{r}
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+
+# Connect to the SQLite database
+conn <- dbConnect(RSQLite::SQLite(), "/Users/asdishalla/Desktop/capstone-the-north-Gagnagrunnur 2/data/rotten_tomatoes.db")
+
+# Query to get movie, director, Tomatometer rating, and actors
+top_movies <- dbGetQuery(conn, "
+  SELECT directors, movie_title, tomatometer_rating,
+    CASE
+      WHEN actors LIKE '%Leonardo DiCaprio%' AND actors LIKE '%Kate Winslet%' THEN 'Bæði'
+      WHEN actors LIKE '%Leonardo DiCaprio%' THEN 'Leo'
+      WHEN actors LIKE '%Kate Winslet%' THEN 'Kate'
+      ELSE NULL
+    END AS actor
+  FROM rotten_tomatoes_movies_dicaprio_winslet
+  WHERE tomatometer_rating IS NOT NULL AND directors IS NOT NULL
+  ORDER BY tomatometer_rating DESC
+  LIMIT 10
+")
+
+# Disconnect from the database
+dbDisconnect(conn)
+
+# Replace spaces in director names with newlines for better readability
+top_movies <- top_movies %>%
+  mutate(directors = gsub(" ", "\n", directors))
+
+# Create the bar chart
+p <- ggplot(top_movies, aes(
+  x = reorder(directors, -tomatometer_rating),
+  y = tomatometer_rating,
+  fill = actor,
+  text = paste("Movie:", movie_title)
+)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Topp 10 leikstjórar miðað við tomatometer einkunn",
+       x = "Leikstjórar", y = "Tomatometer einkunn") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 8, hjust = 0.5)) +  # Keep horizontal labels with smaller font
+  scale_fill_manual(values = c("Kate" = "violet", "Leo" = "skyblue", "Bæði" = "gold")) +
+  guides(fill = guide_legend(title = "Actor")) +
+  geom_text(aes(label = round(tomatometer_rating, 1)), vjust = -0.5, size = 3)  # Add labels on top of bars
+
+# Convert to interactive plot with plotly
+ggplotly(p, tooltip = "text")
+
+```
+
+
+
