@@ -1,0 +1,161 @@
+---
+title: "gröf fyrir mælaborð - final"
+author: "Ásdís Halla Guðmundsdóttir"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load necessary libraries
+library(DBI)
+library(RSQLite)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(lubridate)
+
+# Connect to the SQLite database
+conn <- dbConnect(SQLite(), "/Users/asdishalla/Desktop/capstone-the-north/data/rotten_tomatoes.db")
+
+### Query for Top 10 Tomatometer-Rated Movies
+query_top10 <- "
+SELECT movie_title, tomatometer_rating, audience_rating, directors, actors, original_release_date
+FROM rotten_tomatoes_movies
+WHERE actors LIKE '%Kate Winslet%' OR actors LIKE '%Leonardo DiCaprio%'
+ORDER BY tomatometer_rating DESC
+LIMIT 10
+"
+top10_movies <- dbGetQuery(conn, query_top10)
+
+# Extract unique directors for Tomatometer
+directors <- unique(top10_movies$directors)
+
+### Query for All Movies by These Directors
+query_all_movies <- sprintf("
+SELECT movie_title, tomatometer_rating, audience_rating, directors, actors, original_release_date
+FROM rotten_tomatoes_movies
+WHERE directors IN (%s)
+", paste(sprintf("'%s'", directors), collapse = ", "))
+all_movies <- dbGetQuery(conn, query_all_movies)
+
+### Query for Top 10 Audience-Rated Movies
+query_top10_audience <- "
+SELECT movie_title, tomatometer_rating, audience_rating, directors, actors, original_release_date
+FROM rotten_tomatoes_movies
+WHERE actors LIKE '%Kate Winslet%' OR actors LIKE '%Leonardo DiCaprio%'
+ORDER BY audience_rating DESC
+LIMIT 10
+"
+top10_audience_movies <- dbGetQuery(conn, query_top10_audience)
+
+# Extract unique directors for Audience
+directors_audience <- unique(top10_audience_movies$directors)
+
+### Query for All Movies by These Directors
+query_all_audience_movies <- sprintf("
+SELECT movie_title, tomatometer_rating, audience_rating, directors, actors, original_release_date
+FROM rotten_tomatoes_movies
+WHERE directors IN (%s)
+", paste(sprintf("'%s'", directors_audience), collapse = ", "))
+all_audience_movies <- dbGetQuery(conn, query_all_audience_movies)
+
+### Cleanup: Disconnect from the Database
+dbDisconnect(conn)
+
+```
+
+```{r}
+# Add actor category, average ratings, and release year for Tomatometer movies
+all_movies <- all_movies %>%
+  mutate(
+    actor_category = case_when(
+      grepl("Kate Winslet", actors) & grepl("Leonardo DiCaprio", actors) ~ "Bæði",
+      grepl("Kate Winslet", actors) ~ "Kate",
+      grepl("Leonardo DiCaprio", actors) ~ "Leo",
+      TRUE ~ "None"
+    ),
+    avg_tomatometer = mean(tomatometer_rating, na.rm = TRUE),
+    original_release_year = year(as.Date(original_release_date)),
+    directors = gsub(" ", "\n", directors) # Format director names
+  )
+
+
+# Create the Tomatometer Rating Graph
+p <- ggplot(all_movies, aes(x = directors, y = tomatometer_rating)) +
+  geom_boxplot(
+    aes(text = paste("Leikstjóri:", directors,
+                     "<br>Meðal Tomatometer einkunn:", round(avg_tomatometer, 1))),
+    fill = "blue", outlier.shape = NA
+  ) +
+  geom_point(
+    data = subset(all_movies, actor_category != "None"),
+    aes(color = actor_category, 
+        text = paste("Mynd:", movie_title, 
+                     "<br>Útgáfuár:", original_release_year, 
+                     "<br>Tomatometer einkunn:", tomatometer_rating)),
+    size = 3
+  ) +
+  labs(title = "Tomatometer einkunnadreifing leikstjóra topp 10 Kate/Leo mynda",
+       x = NULL, 
+       y = "Tomatometer einkunn",
+       color = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5)) +
+  scale_color_manual(values = c("Bæði" = "gold", "Leo" = "skyblue", "Kate" = "lightpink"))
+
+# Convert to interactive Plotly graph
+interactive_plot <- ggplotly(p, tooltip = "text")
+interactive_plot
+
+```
+
+```{r}
+# Add actor category, average ratings, and release year for Audience movies
+all_audience_movies <- all_audience_movies %>%
+  mutate(
+    actor_category = case_when(
+      grepl("Kate Winslet", actors) & grepl("Leonardo DiCaprio", actors) ~ "Bæði",
+      grepl("Kate Winslet", actors) ~ "Kate",
+      grepl("Leonardo DiCaprio", actors) ~ "Leo",
+      TRUE ~ "None"
+    ),
+    avg_audience_rating = mean(audience_rating, na.rm = TRUE),
+    original_release_year = year(as.Date(original_release_date)),
+    directors = gsub(" ", "\n", directors) # Format director names
+  )
+
+# Create the Audience Rating Graph
+p_audience <- ggplot(all_audience_movies, aes(x = directors, y = audience_rating)) +
+  geom_boxplot(
+    aes(text = paste("Leikstjóri:", directors,
+                     "<br>Meðal Audience einkunn:", round(avg_audience_rating, 1))),
+    fill = "green", outlier.shape = NA
+  ) +
+  geom_point(
+    data = subset(all_audience_movies, actor_category != "None"),
+    aes(color = actor_category, 
+        text = paste("Mynd:", movie_title, 
+                     "<br>Útgáfuár:", original_release_year, 
+                     "<br>Audience einkunn:", audience_rating)),
+    size = 3
+  ) +
+  labs(title = "Audience einkunnadreifing leikstjóra topp 10 Kate/Leo mynda",
+       x = NULL, 
+       y = "Audience einkunn",
+       color = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5)) +
+  scale_color_manual(values = c("Bæði" = "gold", "Leo" = "skyblue", "Kate" = "lightpink"))
+
+# Convert to interactive Plotly graph
+interactive_plot_audience <- ggplotly(p_audience, tooltip = "text")
+interactive_plot_audience
+
+```
+
+
+
