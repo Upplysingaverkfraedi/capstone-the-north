@@ -1,0 +1,106 @@
+---
+title: "maelabord"
+author: "Guðný Lilja"
+date: "2024-11-17"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(shiny)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(DBI)
+library(RSQLite)
+library(stringr)
+library(plotly)
+library(tm)
+library(wordcloud)
+library(RColorBrewer)
+```
+
+
+```{r}
+# Connect to the database
+conn <- dbConnect(RSQLite::SQLite(), "/Users/gudnylilja/Documents/GitHub/capstone-the-north/data/rotten_tomatoes-3.db")
+
+# Load tables
+leo_movies <- dbReadTable(conn, "leo_movies")
+kate_movies <- dbReadTable(conn, "kate_movies")
+main_actors_in_info <- dbReadTable(conn, "main_actors_in_info")
+dicaprio_winslet_movies <- dbReadTable(conn, "rotten_tomatoes_movies_dicaprio_winslet")
+
+# Disconnect from the database
+dbDisconnect(conn)
+```
+
+
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Greining á kvikmyndagögnum"),
+  sidebarLayout(
+    sidebarPanel(
+      h3("Valmöguleikar"),
+      selectInput("leikari", "Veldu leikara:", choices = c("Leonardo DiCaprio", "Kate Winslet"))
+    ),
+    mainPanel(
+      tabPanel("Orðaský", plotOutput("wordCloud"))
+    )
+  )
+)
+```
+
+
+```{r}
+# Server logic
+server <- function(input, output) {
+  observe({
+    # Prepare and render the word cloud based on selected actor
+    output$wordCloud <- renderPlot({
+      # Connect to the database
+      conn <- dbConnect(RSQLite::SQLite(), "/Users/gudnylilja/Documents/GitHub/capstone-the-north/data/rotten_tomatoes-3.db")
+
+      # Dynamically load the actor data
+      actor_movies <- if (input$leikari == "Leonardo DiCaprio") {
+        dbReadTable(conn, "main_actors_in_info") %>% 
+          filter(grepl("Leonardo DiCaprio", actor_in_info, ignore.case = TRUE))
+      } else {
+        dbReadTable(conn, "main_actors_in_info") %>% 
+          filter(grepl("Kate Winslet", actor_in_info, ignore.case = TRUE))
+      }
+
+      # Disconnect from the database
+      dbDisconnect(conn)
+
+      # Extract all actor names, remove the main actors, and lowercase everything
+      all_actors <- tolower(actor_movies$actors)
+      # Split actors into individual names
+      all_actors <- str_split(all_actors, ",\\s*")
+      # Unlist and remove the main actors
+      all_actors <- unlist(all_actors)
+      all_actors <- all_actors[!all_actors %in% c("leonardo dicaprio", "kate winslet")]
+
+     actor_freqs <- table(all_actors)
+      df <- as.data.frame(actor_freqs, stringsAsFactors = FALSE)
+      names(df) <- c("actor", "freq")
+
+      # Generate the word cloud with adjusted size and spacing
+      wordcloud(words = df$actor, freq = df$freq, min.freq = 1,
+                max.words = 150, random.order = FALSE, rot.per = 0.25,
+                colors = brewer.pal(8, "Dark2"), scale = c(3, 0.5))  # Adjusted for smaller overall sizes
+    })
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+```
+
+
+
+
+
